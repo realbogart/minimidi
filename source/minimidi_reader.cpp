@@ -137,6 +137,16 @@ namespace MiniMidi
 		_Stream << "[Meta Event][dt=" << DeltaTime << "][UnhandledMetaEvent]: Type = "<< hex << setfill('0') << setw(2)<<Type<<", Length = " << Length << endl;
 	}
 
+	void MidiLogReader::OnSysexEvent(uint32_t DeltaTime, uint32_t Length, const char* pData)
+	{
+		_Stream << "[Sysex Event][dt=" << DeltaTime << "]: Length = " << Length << endl;
+	}
+
+	void MidiLogReader::OnSysexEscape(uint32_t DeltaTime, uint32_t Length, const char* pData)
+	{
+		_Stream << "[Sysex Escape][dt=" << DeltaTime << "]: Length = " << Length << endl;
+	}
+
 	MidiLogReader::MidiLogReader(std::ostream& Stream)
 		: _Stream(Stream)
 	{

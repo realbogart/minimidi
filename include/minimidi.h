@@ -72,6 +72,10 @@ namespace MiniMidi
 		virtual void OnKeySignature(uint32_t DeltaTime, int8_t SharpsOrFlats, bool bMinor) = 0;
 		virtual void OnSequencerSpecific(uint32_t DeltaTime, uint32_t Length, const char* pData) = 0;
 		virtual void OnUnhandledMetaEvent(uint32_t DeltaTime, uint8_t Type, uint32_t Length, const char* pData) = 0;
+
+		// Sysex events
+		virtual void OnSysexEvent(uint32_t DeltaTime, uint32_t Length, const char* pData) = 0;
+		virtual void OnSysexEscape(uint32_t DeltaTime, uint32_t Length, const char* pData) = 0;
 	};
 
 	bool ReadData(const char* pData, int DataLength, IMidiReader& MidiReader);

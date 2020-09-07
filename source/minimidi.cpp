@@ -90,9 +90,10 @@ namespace
 		return Value;
 	}
 
+	char loc_TextBuffer[32768];
+
 	bool ReadMetaEvent(SReadData& ReadData, std::istream& Stream, uint32_t DeltaTime, IMidiReader& MidiReader)
 	{
-		char TextBuffer[32768];
 		EMetaEvent Type = (EMetaEvent)Read<uint8_t>(Stream);
 		uint32_t Length = ReadVariableLength(Stream);
 
@@ -114,44 +115,44 @@ namespace
 		break;
 		case EMetaEvent::TextEvent:
 		{
-			Stream.get(TextBuffer, Length+1);
-			MidiReader.OnTextEvent(DeltaTime, TextBuffer);
+			Stream.get(loc_TextBuffer, Length+1);
+			MidiReader.OnTextEvent(DeltaTime, loc_TextBuffer);
 		}
 		break;
 		case EMetaEvent::CopyrightNotice:
 		{
-			Stream.get(TextBuffer, Length + 1);
-			MidiReader.OnCopyrightNotice(DeltaTime, TextBuffer);
+			Stream.get(loc_TextBuffer, Length + 1);
+			MidiReader.OnCopyrightNotice(DeltaTime, loc_TextBuffer);
 		}
 		break;
 		case EMetaEvent::TrackName:
 		{
-			Stream.get(TextBuffer, Length + 1);
-			MidiReader.OnTrackName(DeltaTime, TextBuffer);
+			Stream.get(loc_TextBuffer, Length + 1);
+			MidiReader.OnTrackName(DeltaTime, loc_TextBuffer);
 		}
 		break;
 		case EMetaEvent::InstrumentName:
 		{
-			Stream.get(TextBuffer, Length + 1);
-			MidiReader.OnInstrumentName(DeltaTime, TextBuffer);
+			Stream.get(loc_TextBuffer, Length + 1);
+			MidiReader.OnInstrumentName(DeltaTime, loc_TextBuffer);
 		}
 		break;
 		case EMetaEvent::Lyric:
 		{
-			Stream.get(TextBuffer, Length + 1);
-			MidiReader.OnLyric(DeltaTime, TextBuffer);
+			Stream.get(loc_TextBuffer, Length + 1);
+			MidiReader.OnLyric(DeltaTime, loc_TextBuffer);
 		}
 		break;
 		case EMetaEvent::Marker:
 		{
-			Stream.get(TextBuffer, Length + 1);
-			MidiReader.OnMarker(DeltaTime, TextBuffer);
+			Stream.get(loc_TextBuffer, Length + 1);
+			MidiReader.OnMarker(DeltaTime, loc_TextBuffer);
 		}
 		break;
 		case EMetaEvent::CuePoint:
 		{
-			Stream.get(TextBuffer, Length + 1);
-			MidiReader.OnCuePoint(DeltaTime, TextBuffer);
+			Stream.get(loc_TextBuffer, Length + 1);
+			MidiReader.OnCuePoint(DeltaTime, loc_TextBuffer);
 		}
 		break;
 		case EMetaEvent::ChannelPrefix:
@@ -197,14 +198,14 @@ namespace
 		break;
 		case EMetaEvent::SequencerSpecific:
 		{
-			Stream.get(TextBuffer, Length + 1);
-			MidiReader.OnSequencerSpecific(DeltaTime, Length, TextBuffer);
+			Stream.get(loc_TextBuffer, Length + 1);
+			MidiReader.OnSequencerSpecific(DeltaTime, Length, loc_TextBuffer);
 		}
 		break;
 		default:
 		{
-			Stream.get(TextBuffer, Length + 1);
-			MidiReader.OnUnhandledMetaEvent(DeltaTime, (uint8_t)Type, Length, TextBuffer);
+			Stream.get(loc_TextBuffer, Length + 1);
+			MidiReader.OnUnhandledMetaEvent(DeltaTime, (uint8_t)Type, Length, loc_TextBuffer);
 		}
 		break;
 		}
@@ -212,20 +213,20 @@ namespace
 		return true;
 	}
 
-	bool ReadSysexEvent(SReadData& ReadData, std::istream& Stream, IMidiReader& MidiReader)
+	bool ReadSysexEvent(SReadData& ReadData, std::istream& Stream, uint32_t DeltaTime, IMidiReader& MidiReader)
 	{
 		uint32_t Length = ReadVariableLength(Stream);
-
-		Stream.ignore(Length);
+		Stream.get(loc_TextBuffer, Length + 1);
+		MidiReader.OnSysexEvent(DeltaTime, Length, loc_TextBuffer);
 
 		return true;
 	}
 
-	bool ReadSysexEscape(SReadData& ReadData, std::istream& Stream, IMidiReader& MidiReader)
+	bool ReadSysexEscape(SReadData& ReadData, std::istream& Stream, uint32_t DeltaTime, IMidiReader& MidiReader)
 	{
 		uint32_t Length = ReadVariableLength(Stream);
-
-		Stream.ignore(Length);
+		Stream.get(loc_TextBuffer, Length + 1);
+		MidiReader.OnSysexEscape(DeltaTime, Length, loc_TextBuffer);
 
 		return true;
 	}
@@ -315,11 +316,11 @@ namespace
 		}
 		else if (Status == 0xF0)
 		{
-			return ReadSysexEvent(ReadData, Stream, MidiReader);
+			return ReadSysexEvent(ReadData, Stream, DeltaTime, MidiReader);
 		}
 		else if (Status == 0xF7)
 		{
-			return ReadSysexEscape(ReadData, Stream, MidiReader);
+			return ReadSysexEscape(ReadData, Stream, DeltaTime, MidiReader);
 		}
 		
 		return ReadMidiEvent(ReadData, Stream, Status, DeltaTime, MidiReader);

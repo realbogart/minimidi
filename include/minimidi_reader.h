@@ -46,6 +46,10 @@ namespace MiniMidi
 		virtual void OnSequencerSpecific(uint32_t DeltaTime, uint32_t Length, const char* pData) override;
 		virtual void OnUnhandledMetaEvent(uint32_t DeltaTime, uint8_t Type, uint32_t Length, const char* pData) override;
 
+		// Sysex events
+		virtual void OnSysexEvent(uint32_t DeltaTime, uint32_t Length, const char* pData) override;
+		virtual void OnSysexEscape(uint32_t DeltaTime, uint32_t Length, const char* pData) override;
+
 	private:
 		std::ostream& _Stream;
 		uint32_t TrackCount = 0;
