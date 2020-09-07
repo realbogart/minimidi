@@ -76,38 +76,145 @@ namespace
 		return true;
 	}
 
-	uint32_t ReadVariableLength(SReadData& ReadData, std::istream& Stream)
+	uint32_t ReadVariableLength(std::istream& Stream)
 	{
 		uint32_t Value = 0;
 		uint8_t CurrentByte = 0;
 		do
 		{
 			CurrentByte = Read<uint8_t>(Stream);
-			Value = (Value << 7) + CurrentByte & 0x7f;
+			Value = (Value << 7) + (CurrentByte & 0x7f);
 
 		} while (CurrentByte & 0x80);
 
 		return Value;
 	}
 
-	bool ReadMetaEvent(SReadData& ReadData, std::istream& Stream, IMidiReader& MidiReader)
+	bool ReadMetaEvent(SReadData& ReadData, std::istream& Stream, uint32_t DeltaTime, IMidiReader& MidiReader)
 	{
-		uint8_t Type = Read<uint8_t>(Stream);
-		uint32_t Length = ReadVariableLength(ReadData, Stream);
+		char TextBuffer[32768];
+		EMetaEvent Type = (EMetaEvent)Read<uint8_t>(Stream);
+		uint32_t Length = ReadVariableLength(Stream);
 
-		if (Type == 0x2F)
+		assert(Length < 32768);
+
+		switch (Type)
+		{
+		case EMetaEvent::EndOfTrack:
 		{
 			ReadData.bEndOfTrack = true;
+			MidiReader.OnEndOfTrack(DeltaTime);
 		}
-
-		Stream.ignore(Length);
+		break;
+		case EMetaEvent::SequenceNumber:
+		{
+			uint16_t Number = Read<uint16_t>(Stream);
+			MidiReader.OnSequenceNumber(DeltaTime, Number);
+		}
+		break;
+		case EMetaEvent::TextEvent:
+		{
+			Stream.get(TextBuffer, Length+1);
+			MidiReader.OnTextEvent(DeltaTime, TextBuffer);
+		}
+		break;
+		case EMetaEvent::CopyrightNotice:
+		{
+			Stream.get(TextBuffer, Length + 1);
+			MidiReader.OnCopyrightNotice(DeltaTime, TextBuffer);
+		}
+		break;
+		case EMetaEvent::TrackName:
+		{
+			Stream.get(TextBuffer, Length + 1);
+			MidiReader.OnTrackName(DeltaTime, TextBuffer);
+		}
+		break;
+		case EMetaEvent::InstrumentName:
+		{
+			Stream.get(TextBuffer, Length + 1);
+			MidiReader.OnInstrumentName(DeltaTime, TextBuffer);
+		}
+		break;
+		case EMetaEvent::Lyric:
+		{
+			Stream.get(TextBuffer, Length + 1);
+			MidiReader.OnLyric(DeltaTime, TextBuffer);
+		}
+		break;
+		case EMetaEvent::Marker:
+		{
+			Stream.get(TextBuffer, Length + 1);
+			MidiReader.OnMarker(DeltaTime, TextBuffer);
+		}
+		break;
+		case EMetaEvent::CuePoint:
+		{
+			Stream.get(TextBuffer, Length + 1);
+			MidiReader.OnCuePoint(DeltaTime, TextBuffer);
+		}
+		break;
+		case EMetaEvent::ChannelPrefix:
+		{
+			uint8_t Channel = Read<uint8_t>(Stream);
+			MidiReader.OnChannelPrefix(DeltaTime, Channel);
+		}
+		break;
+		case EMetaEvent::SetTempo:
+		{
+			uint8_t A = Read<uint8_t>(Stream);
+			uint8_t B = Read<uint8_t>(Stream);
+			uint8_t C = Read<uint8_t>(Stream);
+			uint32_t Tempo = (A << 16) | (B << 8) | C;
+			MidiReader.OnSetTempo(DeltaTime, Tempo);
+		}
+		break;
+		case EMetaEvent::SMPTEOffset:
+		{
+			uint8_t Hour = Read<uint8_t>(Stream);
+			uint8_t Minute = Read<uint8_t>(Stream);
+			uint8_t Second = Read<uint8_t>(Stream);
+			uint8_t Frame = Read<uint8_t>(Stream);
+			uint8_t FrameFraction = Read<uint8_t>(Stream);
+			MidiReader.OnSMPTEOffset(DeltaTime, Hour, Minute, Second, Frame, FrameFraction);
+		}
+		break;
+		case EMetaEvent::TimeSignature:
+		{
+			uint8_t Numerator = Read<uint8_t>(Stream);
+			uint8_t Denominator = Read<uint8_t>(Stream);
+			uint8_t MidiClocksPerMetronome = Read<uint8_t>(Stream);
+			uint8_t Num32thPer24Midi = Read<uint8_t>(Stream);
+			MidiReader.OnTimeSignature(DeltaTime, Numerator, Denominator, MidiClocksPerMetronome, Num32thPer24Midi);
+		}
+		break;
+		case EMetaEvent::KeySignature:
+		{
+			int8_t SharpsOrFlats = Read<int8_t>(Stream);
+			uint8_t MajorMinor = Read<uint8_t>(Stream);
+			MidiReader.OnKeySignature(DeltaTime, SharpsOrFlats, MajorMinor == 1);
+		}
+		break;
+		case EMetaEvent::SequencerSpecific:
+		{
+			Stream.get(TextBuffer, Length + 1);
+			MidiReader.OnSequencerSpecific(DeltaTime, Length, TextBuffer);
+		}
+		break;
+		default:
+		{
+			Stream.get(TextBuffer, Length + 1);
+			MidiReader.OnUnhandledMetaEvent(DeltaTime, (uint8_t)Type, Length, TextBuffer);
+		}
+		break;
+		}
 
 		return true;
 	}
 
 	bool ReadSysexEvent(SReadData& ReadData, std::istream& Stream, IMidiReader& MidiReader)
 	{
-		uint32_t Length = ReadVariableLength(ReadData, Stream);
+		uint32_t Length = ReadVariableLength(Stream);
 
 		Stream.ignore(Length);
 
@@ -116,14 +223,14 @@ namespace
 
 	bool ReadSysexEscape(SReadData& ReadData, std::istream& Stream, IMidiReader& MidiReader)
 	{
-		uint32_t Length = ReadVariableLength(ReadData, Stream);
+		uint32_t Length = ReadVariableLength(Stream);
 
 		Stream.ignore(Length);
 
 		return true;
 	}
 
-	bool ReadMidiEvent(SReadData& ReadData, std::istream& Stream, uint8_t Status, IMidiReader& MidiReader)
+	bool ReadMidiEvent(SReadData& ReadData, std::istream& Stream, uint8_t Status, uint32_t DeltaTime, IMidiReader& MidiReader)
 	{
 		EMidiMessage Message = (EMidiMessage)(Status & 0xF0);
 		uint8_t Channel = Status & 0x0F;
@@ -134,53 +241,53 @@ namespace
 		{
 			uint8_t Key = Read<uint8_t>(Stream);
 			uint8_t Velocity = Read<uint8_t>(Stream);
-			MidiReader.OnNoteOff(Key, Velocity);
+			MidiReader.OnNoteOff(DeltaTime, Key, Velocity);
 		}
-			break;
+		break;
 		case EMidiMessage::NoteOn:
 		{
 			uint8_t Key = Read<uint8_t>(Stream);
 			uint8_t Velocity = Read<uint8_t>(Stream);
 			if(Velocity == 0)
-				MidiReader.OnNoteOff(Key, Velocity);
+				MidiReader.OnNoteOff(DeltaTime, Key, Velocity);
 			else
-				MidiReader.OnNoteOn(Key, Velocity);
+				MidiReader.OnNoteOn(DeltaTime, Key, Velocity);
 		}
-			break;
+		break;
 		case EMidiMessage::PolyphonicKeyPressure:
 		{
 			uint8_t Key = Read<uint8_t>(Stream);
 			uint8_t Pressure = Read<uint8_t>(Stream);
-			MidiReader.OnPolyphonicKeyPressure(Key, Pressure);
+			MidiReader.OnPolyphonicKeyPressure(DeltaTime, Key, Pressure);
 		}
-			break;
+		break;
 		case EMidiMessage::ControlChange:
 		{
 			uint8_t ControllerNumber = Read<uint8_t>(Stream);
 			uint8_t Value = Read<uint8_t>(Stream);
-			MidiReader.OnControlChange(ControllerNumber, Value);
+			MidiReader.OnControlChange(DeltaTime, ControllerNumber, Value);
 		}
-			break;
+		break;
 		case EMidiMessage::ProgramChange:
 		{
 			uint8_t ProgramNumber = Read<uint8_t>(Stream);
-			MidiReader.OnProgramChange(ProgramNumber);
+			MidiReader.OnProgramChange(DeltaTime, ProgramNumber);
 		}
-			break;
+		break;
 		case EMidiMessage::ChannelPressure:
 		{
 			uint8_t Pressure = Read<uint8_t>(Stream);
-			MidiReader.OnChannelPressure(Pressure);
+			MidiReader.OnChannelPressure(DeltaTime, Pressure);
 		}
-			break;
+		break;
 		case EMidiMessage::PitchWheelChange:
 		{
 			uint8_t LSB = Read<uint8_t>(Stream);
 			uint8_t MSB = Read<uint8_t>(Stream);
 			uint16_t Value = (MSB << 7) + LSB;
-			MidiReader.OnPitchWheelChange(Value);
+			MidiReader.OnPitchWheelChange(DeltaTime, Value);
 		}
-			break;
+		break;
 		default:
 			SetError(ReadData, "Invalid midi event encountered");
 			return false;
@@ -191,7 +298,7 @@ namespace
 
 	bool ReadTimeEventTuple(SReadData& ReadData, std::istream& Stream, IMidiReader& MidiReader)
 	{
-		uint32_t DeltaTime = ReadVariableLength(ReadData, Stream);
+		uint32_t DeltaTime = ReadVariableLength(Stream);
 		uint8_t Status = Read<uint8_t>(Stream);
 
 		if (!(Status & 0x80))
@@ -204,7 +311,7 @@ namespace
 
 		if (Status == 0xFF)
 		{
-			return ReadMetaEvent(ReadData, Stream, MidiReader);
+			return ReadMetaEvent(ReadData, Stream, DeltaTime, MidiReader);
 		}
 		else if (Status == 0xF0)
 		{
@@ -215,7 +322,7 @@ namespace
 			return ReadSysexEscape(ReadData, Stream, MidiReader);
 		}
 		
-		return ReadMidiEvent(ReadData, Stream, Status, MidiReader);
+		return ReadMidiEvent(ReadData, Stream, Status, DeltaTime, MidiReader);
 	}
 
 	bool ReadTrack(SReadData& ReadData, std::istream& Stream, IMidiReader& MidiReader)
