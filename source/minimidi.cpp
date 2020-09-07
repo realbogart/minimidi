@@ -125,49 +125,60 @@ namespace
 
 	bool ReadMidiEvent(SReadData& ReadData, std::istream& Stream, uint8_t Status, IMidiReader& MidiReader)
 	{
-		uint8_t Command = Status & 0xF0;
+		EMidiMessage Message = (EMidiMessage)(Status & 0xF0);
 		uint8_t Channel = Status & 0x0F;
 
-		switch (Command)
+		switch (Message)
 		{
-		case 0x80:
+		case EMidiMessage::NoteOff:
 		{
-			uint8_t A = Read<uint8_t>(Stream);
-			uint8_t B = Read<uint8_t>(Stream);
+			uint8_t Key = Read<uint8_t>(Stream);
+			uint8_t Velocity = Read<uint8_t>(Stream);
+			MidiReader.OnNoteOff(Key, Velocity);
 		}
 			break;
-		case 0x90:
+		case EMidiMessage::NoteOn:
 		{
-			uint8_t A = Read<uint8_t>(Stream);
-			uint8_t B = Read<uint8_t>(Stream);
+			uint8_t Key = Read<uint8_t>(Stream);
+			uint8_t Velocity = Read<uint8_t>(Stream);
+			if(Velocity == 0)
+				MidiReader.OnNoteOff(Key, Velocity);
+			else
+				MidiReader.OnNoteOn(Key, Velocity);
 		}
 			break;
-		case 0xA0:
+		case EMidiMessage::PolyphonicKeyPressure:
 		{
-			uint8_t A = Read<uint8_t>(Stream);
-			uint8_t B = Read<uint8_t>(Stream);
+			uint8_t Key = Read<uint8_t>(Stream);
+			uint8_t Pressure = Read<uint8_t>(Stream);
+			MidiReader.OnPolyphonicKeyPressure(Key, Pressure);
 		}
 			break;
-		case 0xB0:
+		case EMidiMessage::ControlChange:
 		{
-			uint8_t A = Read<uint8_t>(Stream);
-			uint8_t B = Read<uint8_t>(Stream);
+			uint8_t ControllerNumber = Read<uint8_t>(Stream);
+			uint8_t Value = Read<uint8_t>(Stream);
+			MidiReader.OnControlChange(ControllerNumber, Value);
 		}
 			break;
-		case 0xC0:
+		case EMidiMessage::ProgramChange:
 		{
-			uint8_t A = Read<uint8_t>(Stream);
+			uint8_t ProgramNumber = Read<uint8_t>(Stream);
+			MidiReader.OnProgramChange(ProgramNumber);
 		}
 			break;
-		case 0xD0:
+		case EMidiMessage::ChannelPressure:
 		{
-			uint8_t A = Read<uint8_t>(Stream);
+			uint8_t Pressure = Read<uint8_t>(Stream);
+			MidiReader.OnChannelPressure(Pressure);
 		}
 			break;
-		case 0xE0:
+		case EMidiMessage::PitchWheelChange:
 		{
-			uint8_t A = Read<uint8_t>(Stream);
-			uint8_t B = Read<uint8_t>(Stream);
+			uint8_t LSB = Read<uint8_t>(Stream);
+			uint8_t MSB = Read<uint8_t>(Stream);
+			uint16_t Value = (MSB << 7) + LSB;
+			MidiReader.OnPitchWheelChange(Value);
 		}
 			break;
 		default:

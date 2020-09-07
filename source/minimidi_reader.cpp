@@ -1,3 +1,8 @@
+#include "..\include\minimidi_reader.h"
+#include "..\include\minimidi_reader.h"
+#include "..\include\minimidi_reader.h"
+#include "..\include\minimidi_reader.h"
+#include "..\include\minimidi_reader.h"
 #include "minimidi_reader.h"
 
 #include <iostream>
@@ -21,6 +26,41 @@ namespace MiniMidi
 		_Stream << "An error occurred: " << pErrorMessage << endl;
 	}
 
+	void MidiLogReader::OnNoteOff(uint8_t Key, uint16_t Velocity)
+	{
+		_Stream << "[Midi message][NoteOff]: "<<"Key = "<< (int)Key <<", Velocity = " << (int)Velocity << endl;
+	}
+
+	void MidiLogReader::OnNoteOn(uint8_t Key, uint16_t Velocity)
+	{
+		_Stream << "[Midi message][NoteOn]: " << "Key = " << (int)Key << ", Velocity = " << (int)Velocity << endl;
+	}
+
+	void MidiLogReader::OnPolyphonicKeyPressure(uint8_t Key, uint16_t Pressure)
+	{
+		_Stream << "[Midi message][PolyphonicKeyPressure]: " << "Key = " << (int)Key << ", Pressure = " << (int)Pressure << endl;
+	}
+
+	void MidiLogReader::OnControlChange(uint8_t ControllerNumber, uint8_t Value)
+	{
+		_Stream << "[Midi message][ControlChange]: " << "ControllerNumber = " << (int)ControllerNumber << ", Value = " << (int)Value << endl;
+	}
+
+	void MidiLogReader::OnProgramChange(uint8_t ProgramNumber)
+	{
+		_Stream << "[Midi message][ProgramChange]: " << "ProgramNumber = " << (int)ProgramNumber << endl;
+	}
+
+	void MidiLogReader::OnChannelPressure(uint8_t Pressure)
+	{
+		_Stream << "[Midi message][ChannelPressure]: " << "Pressure = " << (int)Pressure << endl;
+	}
+
+	void MidiLogReader::OnPitchWheelChange(uint16_t Value)
+	{
+		_Stream << "[Midi message][PitchWheelChange]: " << "Value = " << (int)Value << endl;
+	}
+
 	MidiLogReader::MidiLogReader(std::ostream& Stream)
 		: _Stream(Stream)
 	{
@@ -28,7 +68,7 @@ namespace MiniMidi
 
 	void MidiLogReader::OnTrack(uint32_t Length)
 	{
-		TrackCount++;
 		_Stream << "Reading track " << TrackCount << ": Length = " << Length << " bytes" << endl;
+		TrackCount++;
 	}
 }
