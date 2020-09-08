@@ -27,6 +27,7 @@ namespace MiniMidi
 		Marker = 0x06,
 		CuePoint = 0x07,
 		ChannelPrefix = 0x20,
+		MidiPort = 0x21,
 		EndOfTrack = 0x2F,
 		SetTempo = 0x51,
 		SMPTEOffset = 0x54,
@@ -41,10 +42,11 @@ namespace MiniMidi
 		// Reading
 		virtual void OnSuccess() = 0;
 		virtual void OnError(const char* pErrorMessage) = 0;
-
+		
 		// Chunks
 		virtual void OnHeader(uint16_t Format, uint16_t Tracks, uint16_t Division) = 0;
 		virtual void OnTrack(uint32_t Length) = 0;
+		virtual void OnUnknownChunk(uint32_t Type, uint32_t Length) = 0;
 
 		// Midi messages
 		virtual void OnNoteOff(uint32_t DeltaTime, uint8_t Key, uint16_t Velocity) = 0;
@@ -66,6 +68,7 @@ namespace MiniMidi
 		virtual void OnMarker(uint32_t DeltaTime, const char* pMarker) = 0;
 		virtual void OnCuePoint(uint32_t DeltaTime, const char* pCuePoint) = 0;
 		virtual void OnChannelPrefix(uint32_t DeltaTime, uint8_t Channel) = 0;
+		virtual void OnMidiPort(uint32_t DeltaTime, uint8_t Port) = 0;
 		virtual void OnSetTempo(uint32_t DeltaTime, uint32_t Tempo) = 0;
 		virtual void OnSMPTEOffset(uint32_t DeltaTime, uint8_t Hour, uint8_t Minute, uint8_t Second, uint8_t Frame, uint8_t FrameFraction) = 0;
 		virtual void OnTimeSignature(uint32_t DeltaTime, uint8_t Numerator, uint8_t Denominator, uint8_t MidiClocksPerMetronome, uint8_t Num32thPer24Midi) = 0;

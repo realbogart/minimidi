@@ -19,10 +19,13 @@ namespace
 
 	struct SReadData
 	{
+		uint16_t NumReadTracks = 0;
+		uint16_t ExpectingNumTracks = 0;
 		uint8_t RunningStatus = 0;
 		bool bEndOfTrack = false;
 		EStatus Status = EStatus::Running;
 		std::string ErrorMessage;
+		bool bReadHeader = false;
 	};
 
 	void SetError(SReadData& ReadData, const char* pErrorMessage)
@@ -57,10 +60,8 @@ namespace
 		return Value;
 	}
 
-	bool ReadHeader(SReadData& ReadData, std::istream& Stream, IMidiReader& MidiReader)
+	bool ReadHeader(SReadData& ReadData, uint32_t Length, std::istream& Stream, IMidiReader& MidiReader)
 	{
-		uint32_t Length = SwapBytes(Read<uint32_t>(Stream));
-
 		if (Length < 6)
 		{
 			SetError(ReadData, "Corrupt midi header");
@@ -68,8 +69,10 @@ namespace
 		}
 
 		uint16_t Format = SwapBytes(Read<uint16_t>(Stream));
-		uint16_t Tracks = SwapBytes(Read<uint16_t>(Stream));
+		uint16_t Tracks = ReadData.ExpectingNumTracks = SwapBytes(Read<uint16_t>(Stream));
 		uint16_t Division = SwapBytes(Read<uint16_t>(Stream));
+
+		ReadData.bReadHeader = true;
 
 		MidiReader.OnHeader(Format, Tracks, Division);
 
@@ -78,12 +81,17 @@ namespace
 
 	uint32_t ReadVariableLength(std::istream& Stream)
 	{
+		uint32_t Count = 0;
 		uint32_t Value = 0;
 		uint8_t CurrentByte = 0;
 		do
 		{
 			CurrentByte = Read<uint8_t>(Stream);
 			Value = (Value << 7) + (CurrentByte & 0x7f);
+			Count++;
+
+			if (Count > 20)
+				throw 20;
 
 		} while (CurrentByte & 0x80);
 
@@ -91,6 +99,11 @@ namespace
 	}
 
 	char loc_TextBuffer[32768];
+	void ReadToTextbuffer(std::istream& Stream, uint32_t Length)
+	{
+		Stream.read(loc_TextBuffer, Length);
+		loc_TextBuffer[Length] = '\0';
+	}
 
 	bool ReadMetaEvent(SReadData& ReadData, std::istream& Stream, uint32_t DeltaTime, IMidiReader& MidiReader)
 	{
@@ -115,43 +128,43 @@ namespace
 		break;
 		case EMetaEvent::TextEvent:
 		{
-			Stream.get(loc_TextBuffer, Length+1);
+			ReadToTextbuffer(Stream, Length);
 			MidiReader.OnTextEvent(DeltaTime, loc_TextBuffer);
 		}
 		break;
 		case EMetaEvent::CopyrightNotice:
 		{
-			Stream.get(loc_TextBuffer, Length + 1);
+			ReadToTextbuffer(Stream, Length);
 			MidiReader.OnCopyrightNotice(DeltaTime, loc_TextBuffer);
 		}
 		break;
 		case EMetaEvent::TrackName:
 		{
-			Stream.get(loc_TextBuffer, Length + 1);
+			ReadToTextbuffer(Stream, Length);
 			MidiReader.OnTrackName(DeltaTime, loc_TextBuffer);
 		}
 		break;
 		case EMetaEvent::InstrumentName:
 		{
-			Stream.get(loc_TextBuffer, Length + 1);
+			ReadToTextbuffer(Stream, Length);
 			MidiReader.OnInstrumentName(DeltaTime, loc_TextBuffer);
 		}
 		break;
 		case EMetaEvent::Lyric:
 		{
-			Stream.get(loc_TextBuffer, Length + 1);
+			ReadToTextbuffer(Stream, Length);
 			MidiReader.OnLyric(DeltaTime, loc_TextBuffer);
 		}
 		break;
 		case EMetaEvent::Marker:
 		{
-			Stream.get(loc_TextBuffer, Length + 1);
+			ReadToTextbuffer(Stream, Length);
 			MidiReader.OnMarker(DeltaTime, loc_TextBuffer);
 		}
 		break;
 		case EMetaEvent::CuePoint:
 		{
-			Stream.get(loc_TextBuffer, Length + 1);
+			ReadToTextbuffer(Stream, Length);
 			MidiReader.OnCuePoint(DeltaTime, loc_TextBuffer);
 		}
 		break;
@@ -159,6 +172,12 @@ namespace
 		{
 			uint8_t Channel = Read<uint8_t>(Stream);
 			MidiReader.OnChannelPrefix(DeltaTime, Channel);
+		}
+		break;
+		case EMetaEvent::MidiPort:
+		{
+			uint8_t Port = Read<uint8_t>(Stream);
+			MidiReader.OnMidiPort(DeltaTime, Port);
 		}
 		break;
 		case EMetaEvent::SetTempo:
@@ -198,13 +217,13 @@ namespace
 		break;
 		case EMetaEvent::SequencerSpecific:
 		{
-			Stream.get(loc_TextBuffer, Length + 1);
+			ReadToTextbuffer(Stream, Length);
 			MidiReader.OnSequencerSpecific(DeltaTime, Length, loc_TextBuffer);
 		}
 		break;
 		default:
 		{
-			Stream.get(loc_TextBuffer, Length + 1);
+			ReadToTextbuffer(Stream, Length);
 			MidiReader.OnUnhandledMetaEvent(DeltaTime, (uint8_t)Type, Length, loc_TextBuffer);
 		}
 		break;
@@ -216,8 +235,9 @@ namespace
 	bool ReadSysexEvent(SReadData& ReadData, std::istream& Stream, uint32_t DeltaTime, IMidiReader& MidiReader)
 	{
 		uint32_t Length = ReadVariableLength(Stream);
-		Stream.get(loc_TextBuffer, Length + 1);
+		ReadToTextbuffer(Stream, Length);
 		MidiReader.OnSysexEvent(DeltaTime, Length, loc_TextBuffer);
+		ReadData.RunningStatus = 0;
 
 		return true;
 	}
@@ -225,8 +245,9 @@ namespace
 	bool ReadSysexEscape(SReadData& ReadData, std::istream& Stream, uint32_t DeltaTime, IMidiReader& MidiReader)
 	{
 		uint32_t Length = ReadVariableLength(Stream);
-		Stream.get(loc_TextBuffer, Length + 1);
+		ReadToTextbuffer(Stream, Length);
 		MidiReader.OnSysexEscape(DeltaTime, Length, loc_TextBuffer);
+		ReadData.RunningStatus = 0;
 
 		return true;
 	}
@@ -308,8 +329,6 @@ namespace
 			Stream.seekg(-1, std::ios_base::cur);
 		}
 
-		ReadData.RunningStatus = Status;
-
 		if (Status == 0xFF)
 		{
 			return ReadMetaEvent(ReadData, Stream, DeltaTime, MidiReader);
@@ -323,18 +342,20 @@ namespace
 			return ReadSysexEscape(ReadData, Stream, DeltaTime, MidiReader);
 		}
 		
+		ReadData.RunningStatus = Status;
+
 		return ReadMidiEvent(ReadData, Stream, Status, DeltaTime, MidiReader);
 	}
 
-	bool ReadTrack(SReadData& ReadData, std::istream& Stream, IMidiReader& MidiReader)
+	bool ReadTrack(SReadData& ReadData, uint32_t Length, std::istream& Stream, IMidiReader& MidiReader)
 	{
-		uint32_t Length = SwapBytes(Read<uint32_t>(Stream));
-
 		if (Length < 1)
 		{
 			SetError(ReadData, "Corrupt track encountered");
 			return false;
 		}
+
+		ReadData.NumReadTracks++;
 
 		MidiReader.OnTrack(Length);
 
@@ -355,6 +376,7 @@ namespace
 	bool ReadChunk(SReadData& ReadData, std::istream& Stream, IMidiReader& MidiReader)
 	{
 		uint32_t Type = Read<uint32_t>(Stream);
+		uint32_t Length = SwapBytes(Read<uint32_t>(Stream));
 
 		if (Stream.eof())
 		{
@@ -370,15 +392,18 @@ namespace
 		{
 		case 1684558925: // MThd
 		{
-			return ReadHeader(ReadData, Stream, MidiReader);
+			return ReadHeader(ReadData, Length, Stream, MidiReader);
 		}
 		case 1802654797: // MTrk
 		{
-			return ReadTrack(ReadData, Stream, MidiReader);
+			return ReadTrack(ReadData, Length, Stream, MidiReader);
 		}
 		default:
-			SetError(ReadData, "Invalid chunk type encountered");
-			return false;
+		{
+			Stream.ignore(Length);
+			MidiReader.OnUnknownChunk(Type, Length);
+		}
+			break;
 		}
 
 		return true;
@@ -387,14 +412,33 @@ namespace
 	bool ReadMidi(std::istream& Stream, IMidiReader& MidiReader)
 	{
 		SReadData ReadData;
-		while (ReadChunk(ReadData, Stream, MidiReader))
-			;
-
-		if (ReadData.Status == EStatus::Running)
+		try
 		{
-			SetError(ReadData, "Finished reading with an unhandled error");
+			while (ReadChunk(ReadData, Stream, MidiReader))
+				;
+
+			if (ReadData.Status == EStatus::Running)
+			{
+				SetError(ReadData, "Finished reading with an unhandled error");
+			}
+			else if (!ReadData.bReadHeader)
+			{
+				SetError(ReadData, "Corrupt midi file. Could not find a header");
+			}
+			else if (ReadData.NumReadTracks != ReadData.ExpectingNumTracks)
+			{
+				SetError(ReadData, "Corrupt midi file. Number of tracks read differs from header");
+			}
 		}
-		else if (ReadData.Status == EStatus::Success)
+		catch (int e)
+		{
+			if (e == 20)
+			{
+				SetError(ReadData, "Corrupt midi file. Infinite loop when reading variable length");
+			}
+		}
+
+		if (ReadData.Status == EStatus::Success)
 		{
 			MidiReader.OnSuccess();
 			return true;

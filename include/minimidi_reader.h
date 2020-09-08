@@ -18,6 +18,7 @@ namespace MiniMidi
 		// Chunks
 		virtual void OnTrack(uint32_t Length) override;
 		virtual void OnHeader(uint16_t Format, uint16_t Tracks, uint16_t Division) override;
+		virtual void OnUnknownChunk(uint32_t Type, uint32_t Length) override;
 
 		// Midi messages
 		virtual void OnNoteOff(uint32_t DeltaTime, uint8_t Key, uint16_t Velocity) override;
@@ -39,6 +40,7 @@ namespace MiniMidi
 		virtual void OnMarker(uint32_t DeltaTime, const char* pMarker) override;
 		virtual void OnCuePoint(uint32_t DeltaTime, const char* pCuePoint) override;
 		virtual void OnChannelPrefix(uint32_t DeltaTime, uint8_t Channel) override;
+		virtual void OnMidiPort(uint32_t DeltaTime, uint8_t Port) override;
 		virtual void OnSetTempo(uint32_t DeltaTime, uint32_t Tempo) override;
 		virtual void OnSMPTEOffset(uint32_t DeltaTime, uint8_t Hour, uint8_t Minute, uint8_t Second, uint8_t Frame, uint8_t FrameFraction) override;
 		virtual void OnTimeSignature(uint32_t DeltaTime, uint8_t Numerator, uint8_t Denominator, uint8_t MidiClocksPerMetronome, uint8_t Num32thPer24Midi) override;
@@ -50,8 +52,16 @@ namespace MiniMidi
 		virtual void OnSysexEvent(uint32_t DeltaTime, uint32_t Length, const char* pData) override;
 		virtual void OnSysexEscape(uint32_t DeltaTime, uint32_t Length, const char* pData) override;
 
+		const std::string& GetError() const { return _ErrorMessage; }
+
 	private:
 		std::ostream& _Stream;
-		uint32_t TrackCount = 0;
+		std::string _ErrorMessage;
+
+		uint32_t _TrackCount = 0;
+		uint32_t _MidiMessagesCount = 0;
+		uint32_t _MetaEventsCount = 0;
+		uint32_t _SysexCount = 0;
+		uint32_t _UnhandledCount = 0;
 	};
 }
