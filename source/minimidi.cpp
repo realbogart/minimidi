@@ -21,6 +21,7 @@ namespace
 	{
 		uint16_t NumReadTracks = 0;
 		uint16_t ExpectingNumTracks = 0;
+		uint32_t LastReadPosition = 0;
 		uint8_t RunningStatus = 0;
 		bool bEndOfTrack = false;
 		EStatus Status = EStatus::Running;
@@ -31,7 +32,8 @@ namespace
 	void SetError(SReadData& ReadData, const char* pErrorMessage)
 	{
 		ReadData.Status = EStatus::Error;
-		ReadData.ErrorMessage = pErrorMessage;
+		ReadData.ErrorMessage += pErrorMessage;
+		ReadData.ErrorMessage += "\n";
 	}
 
 	template<typename T>
@@ -79,23 +81,26 @@ namespace
 		return true;
 	}
 
-	uint32_t ReadVariableLength(std::istream& Stream)
+	bool ReadVariableLength(SReadData& ReadData, std::istream& Stream, uint32_t& Value)
 	{
+		Value = 0;
+
 		uint32_t Count = 0;
-		uint32_t Value = 0;
 		uint8_t CurrentByte = 0;
 		do
 		{
 			CurrentByte = Read<uint8_t>(Stream);
 			Value = (Value << 7) + (CurrentByte & 0x7f);
+			if (Count > 3)
+			{
+				SetError(ReadData, "Corrupt midi file. Infinite loop when reading variable length");
+				return false;
+			}
+
 			Count++;
-
-			if (Count > 20)
-				throw 20;
-
 		} while (CurrentByte & 0x80);
 
-		return Value;
+		return true;
 	}
 
 	char loc_TextBuffer[32768];
@@ -108,7 +113,10 @@ namespace
 	bool ReadMetaEvent(SReadData& ReadData, std::istream& Stream, uint32_t DeltaTime, IMidiReader& MidiReader)
 	{
 		EMetaEvent Type = (EMetaEvent)Read<uint8_t>(Stream);
-		uint32_t Length = ReadVariableLength(Stream);
+		uint32_t Length;
+		
+		if (!ReadVariableLength(ReadData, Stream, Length))
+			return false;
 
 		assert(Length < 32768);
 
@@ -234,7 +242,10 @@ namespace
 
 	bool ReadSysexEvent(SReadData& ReadData, std::istream& Stream, uint32_t DeltaTime, IMidiReader& MidiReader)
 	{
-		uint32_t Length = ReadVariableLength(Stream);
+		uint32_t Length;
+		if (!ReadVariableLength(ReadData, Stream, Length))
+			return false;
+
 		ReadToTextbuffer(Stream, Length);
 		MidiReader.OnSysexEvent(DeltaTime, Length, loc_TextBuffer);
 		ReadData.RunningStatus = 0;
@@ -244,7 +255,10 @@ namespace
 
 	bool ReadSysexEscape(SReadData& ReadData, std::istream& Stream, uint32_t DeltaTime, IMidiReader& MidiReader)
 	{
-		uint32_t Length = ReadVariableLength(Stream);
+		uint32_t Length;
+		if (!ReadVariableLength(ReadData, Stream, Length))
+			return false;
+
 		ReadToTextbuffer(Stream, Length);
 		MidiReader.OnSysexEscape(DeltaTime, Length, loc_TextBuffer);
 		ReadData.RunningStatus = 0;
@@ -320,7 +334,10 @@ namespace
 
 	bool ReadTimeEventTuple(SReadData& ReadData, std::istream& Stream, IMidiReader& MidiReader)
 	{
-		uint32_t DeltaTime = ReadVariableLength(Stream);
+		uint32_t DeltaTime;
+		if (!ReadVariableLength(ReadData, Stream, DeltaTime))
+			return false;
+
 		uint8_t Status = Read<uint8_t>(Stream);
 
 		if (!(Status & 0x80))
@@ -412,30 +429,20 @@ namespace
 	bool ReadMidi(std::istream& Stream, IMidiReader& MidiReader)
 	{
 		SReadData ReadData;
-		try
-		{
-			while (ReadChunk(ReadData, Stream, MidiReader))
-				;
+		while (ReadChunk(ReadData, Stream, MidiReader))
+			;
 
-			if (ReadData.Status == EStatus::Running)
-			{
-				SetError(ReadData, "Finished reading with an unhandled error");
-			}
-			else if (!ReadData.bReadHeader)
-			{
-				SetError(ReadData, "Corrupt midi file. Could not find a header");
-			}
-			else if (ReadData.NumReadTracks != ReadData.ExpectingNumTracks)
-			{
-				SetError(ReadData, "Corrupt midi file. Number of tracks read differs from header");
-			}
-		}
-		catch (int e)
+		if (ReadData.Status == EStatus::Running)
 		{
-			if (e == 20)
-			{
-				SetError(ReadData, "Corrupt midi file. Infinite loop when reading variable length");
-			}
+			SetError(ReadData, "Finished reading with an unhandled error");
+		}
+		else if (!ReadData.bReadHeader)
+		{
+			SetError(ReadData, "Corrupt midi file. Could not find a header");
+		}
+		else if (ReadData.NumReadTracks != ReadData.ExpectingNumTracks)
+		{
+			SetError(ReadData, "Corrupt midi file. Number of tracks read differs from header");
 		}
 
 		if (ReadData.Status == EStatus::Success)
