@@ -49,6 +49,7 @@ namespace MiniMidi
 		virtual void OnUnknownChunk(uint32_t Type, uint32_t Length) = 0;
 
 		// Midi messages
+		virtual void OnEventStart(uint8_t Status, uint32_t DeltaTime) = 0;
 		virtual void OnNoteOff(uint32_t DeltaTime, uint8_t Key, uint16_t Velocity) = 0;
 		virtual void OnNoteOn(uint32_t DeltaTime, uint8_t Key, uint16_t Velocity) = 0;
 		virtual void OnPolyphonicKeyPressure(uint32_t DeltaTime, uint8_t Key, uint16_t Pressure) = 0;
@@ -81,6 +82,6 @@ namespace MiniMidi
 		virtual void OnSysexEscape(uint32_t DeltaTime, uint32_t Length, const char* pData) = 0;
 	};
 
-	bool ReadData(const char* pData, int DataLength, IMidiReader& MidiReader);
+	bool ReadData(const char* pData, uint32_t DataLength, IMidiReader& MidiReader);
 	bool ReadData(std::istream& Stream, IMidiReader& MidiReader);
 }

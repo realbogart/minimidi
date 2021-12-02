@@ -74,6 +74,24 @@ namespace
 		uint16_t Tracks = ReadData.ExpectingNumTracks = SwapBytes(Read<uint16_t>(Stream));
 		uint16_t Division = SwapBytes(Read<uint16_t>(Stream));
 
+		// TODO:
+		/*
+		If bit 15 of <division> is zero, the bits 14 thru 0 represent the number of 
+		delta time "ticks" which make up a quarter-note. For instance, if division is 96, 
+		then a time interval of an eighth-note between two events in the file would be 48.
+
+		If bit 15 of <division> is a one, delta times in a file correspond to subdivisions of a second, 
+		in a way consistent with SMPTE and MIDI Time Code. Bits 14 thru 8 contain one of 
+		the four values -24, -25, -29, or -30, corresponding to the four standard 
+		SMPTE and MIDI Time Code formats (-29 corresponds to 30 drop frame), and represents
+		the number of frames per second. These negative numbers are stored in two's compliment form. 
+		The second byte (stored positive) is the resolution within a frame: typical values may 
+		be 4 (MIDI Time Code resolution), 8, 10, 80 (bit resolution), or 100. This stream allows
+		exact specifications of time-code-based tracks, but also allows millisecond-based tracks by 
+		specifying 25 frames/sec and a resolution of 40 units per frame. If the events in a file are stored 
+		with a bit resolution of thirty-frame time code, the division word would be E250 hex.
+		*/
+
 		ReadData.bReadHeader = true;
 
 		MidiReader.OnHeader(Format, Tracks, Division);
@@ -346,6 +364,8 @@ namespace
 			Stream.seekg(-1, std::ios_base::cur);
 		}
 
+		MidiReader.OnEventStart(Status, DeltaTime);
+
 		if (Status == 0xFF)
 		{
 			return ReadMetaEvent(ReadData, Stream, DeltaTime, MidiReader);
@@ -460,22 +480,31 @@ namespace
 		return false;
 	}
 
-	struct MemoryBuffer : std::streambuf
+	struct IMemBuf : std::streambuf
 	{
-		MemoryBuffer(const char* pBegin, const char* pEnd) 
+		IMemBuf(const char* pBase, size_t Size)
 		{
-			setg((char*)pBegin, (char*)pBegin, (char*)pEnd);
+			char* p(const_cast<char*>(pBase));
+			this->setg(p, p, p + Size);
+		}
+	};
+
+	struct IMemStream : virtual IMemBuf, std::istream
+	{
+		IMemStream(const char* pData, size_t Size) :
+			IMemBuf(pData, Size),
+			std::istream(static_cast<std::streambuf*>(this))
+		{
 		}
 	};
 }
 
 namespace MiniMidi
 {
-	bool ReadData(const char* pData, int DataLength, IMidiReader& MidiReader)
+	bool ReadData(const char* pData, uint32_t DataLength, IMidiReader& MidiReader)
 	{
-		MemoryBuffer Buffer(pData, pData + DataLength);
-		std::istream Stream(&Buffer, ios::in | ios::binary);
-		return ReadMidi(Stream, MidiReader);
+		IMemStream MemStream(pData, DataLength);
+		return ReadMidi(MemStream, MidiReader);
 	}
 
 	bool ReadData(std::istream& Stream, IMidiReader& MidiReader)

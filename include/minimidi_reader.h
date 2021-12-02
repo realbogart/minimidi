@@ -21,6 +21,7 @@ namespace MiniMidi
 		virtual void OnUnknownChunk(uint32_t Type, uint32_t Length) override;
 
 		// Midi messages
+		virtual void OnEventStart(uint8_t Status, uint32_t DeltaTime);
 		virtual void OnNoteOff(uint32_t DeltaTime, uint8_t Key, uint16_t Velocity) override;
 		virtual void OnNoteOn(uint32_t DeltaTime, uint8_t Key, uint16_t Velocity) override;
 		virtual void OnPolyphonicKeyPressure(uint32_t DeltaTime, uint8_t Key, uint16_t Pressure) override;

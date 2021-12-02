@@ -1,3 +1,4 @@
+#include "..\include\minimidi_reader.h"
 #include "minimidi_reader.h"
 
 #include <iostream>
@@ -45,6 +46,10 @@ namespace MiniMidi
 	{
 		_Stream << "[Error]: " << pErrorMessage << endl;
 		_ErrorMessage = pErrorMessage;
+	}
+
+	void MidiLogReader::OnEventStart(uint8_t Status, uint32_t DeltaTime)
+	{
 	}
 
 	void MidiLogReader::OnNoteOff(uint32_t DeltaTime, uint8_t Key, uint16_t Velocity)
